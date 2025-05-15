@@ -228,6 +228,14 @@
         const closeModal = document.getElementById('closeModal');
         const imageOption = document.getElementById('imageOption');
         const videoOption = document.getElementById('videoOption');
+        const mainContent = document.querySelector('main');
+        const navigation = document.querySelector('nav');
+
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
 
         // Stories Elements
         const storiesViewer = document.getElementById('storiesViewer');
@@ -248,12 +256,12 @@
         let tg = window.Telegram?.WebApp;
 
         // Stories Functions
-        async function fetchStories() {
+        async function fetchStories(customUserId = null) {
             try {
-                if (!tg || !tg.initDataUnsafe?.user?.id) {
-                    throw new Error('Telegram Web App not properly initialized');
+                const userId = customUserId || (tg?.initDataUnsafe?.user?.id);
+                if (!userId) {
+                    throw new Error('User ID not available');
                 }
-                const userId = tg.initDataUnsafe.user.id;
                 const response = await fetch(`https://telegram-upload-api.farziandoc5650.workers.dev/stories/${userId}`);
                 if (!response.ok) throw new Error('خطا در دریافت استوری‌ها');
                 stories = await response.json();
@@ -298,21 +306,6 @@
             // Update progress and info
             updateStoryProgress();
             storyInfo.textContent = timeAgo;
-
-            // Clear existing timeout
-            if (storyTimeout) clearTimeout(storyTimeout);
-
-            // Set timeout for auto-advance (only for images)
-            if (mediaUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
-                storyTimeout = setTimeout(() => {
-                    if (currentStoryIndex < stories.length - 1) {
-                        currentStoryIndex++;
-                        showCurrentStory();
-                    } else {
-                        closeStoriesViewer();
-                    }
-                }, 5000);
-            }
         }
 
         function showStoriesViewer() {
@@ -362,6 +355,33 @@
         });
 
         closeStories.addEventListener('click', closeStoriesViewer);
+
+        // Check for user ID in URL parameter and show stories directly
+        window.addEventListener('load', async () => {
+            const userIdParam = getUrlParameter('tgWebAppStartParam');
+            if (userIdParam) {
+                // Hide main content and navigation
+                mainContent.style.display = 'none';
+                navigation.style.display = 'none';
+                
+                // Show loading indicator
+                loadingStories.classList.remove('hidden');
+                
+                try {
+                    const hasStories = await fetchStories(userIdParam);
+                    if (hasStories) {
+                        showStoriesViewer();
+                    } else {
+                        alert('هیچ استوری‌ای یافت نشد');
+                    }
+                } catch (error) {
+                    console.error('Error loading stories:', error);
+                    alert('خطا در بارگذاری استوری‌ها');
+                } finally {
+                    loadingStories.classList.add('hidden');
+                }
+            }
+        });
 
         // Handle keyboard navigation
         document.addEventListener('keydown', (e) => {
@@ -481,6 +501,7 @@
             try {
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', 'https://telegram-upload-api.farziandoc5650.workers.dev/upload');
+                xhr.setRequestHeader('User-ID', tg.initDataUnsafe.user.id);
 
                 xhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
